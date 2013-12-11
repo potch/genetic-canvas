@@ -1,0 +1,340 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1">
+    <title>Canvas Genetics</title>
+    <style>
+    body {
+      margin: 0;
+    }
+    pre {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      padding: 1em;
+      margin: 0;
+      background: rgba(255,255,255,.9);
+    }
+    canvas {
+      display: block;
+      float: left;
+      margin: 1px;
+    }
+    canvas:after {
+      content: attr(data-being);
+    }
+    </style>
+  </head>
+  <body>
+    <pre id="status"></pre>
+    <script src="https://rawgithub.com/mrdoob/stats.js/master/src/Stats.js"></script>
+    <script>
+
+      // size of canvases
+      var w = 256;
+      var h = 320;
+      // number of canvases
+      var n = 10;
+      // number of shapes
+      var t = 101;
+
+      var mutations = 10;
+
+      var sample = 2;
+      var maxError = hypot(255,255,255) * (w/sample) * (h/sample);
+
+      var img = new Image();
+      var master;
+      var kids = [];
+      var canvases = [];
+      var diff;
+      var oldwinner;
+      var reign = 0;
+      var avgReign = 0;
+      var pre = document.getElementById('status');
+
+      var stats = new Stats();
+      stats.domElement.style.position = 'fixed';
+      stats.domElement.style.right = '0px';
+      stats.domElement.style.bottom = '0px';
+      document.body.appendChild( stats.domElement );
+
+      img.onload = init;
+      img.src = 'mona.jpg';
+
+      function hypot() {
+        var n = arguments.length;
+        var sum = 0;
+        for (var i=0; i<n; i++) {
+          sum += Math.pow(arguments[i], 2);
+        }
+        return Math.sqrt(sum);
+      }
+
+      function Canvas(w, h) {
+          this.el = document.createElement('canvas');
+          this.el.width = w;
+          this.el.height = h;
+          this.getCtx();
+      }
+      Canvas.prototype = {
+          getCtx: function () {
+              this._ctx = this.el.getContext('2d');
+          },
+          get ctx () {
+              return this._ctx;
+          },
+          clear: function() {
+              this.ctx.clearRect(0, 0, this.width, this.height);
+          },
+          get width () {
+              return this.el.width;
+          },
+          set width (w) {
+              this.el.width = w;
+              this.getCtx();
+          },
+          get height () {
+              return this.el.height;
+          },
+          set height (h) {
+              this.el.height = h;
+              this.getCtx();
+          },
+          get data () {
+              return this.ctx.getImageData(0, 0, this.width, this.height);
+          },
+          set data (imageData) {
+              this.ctx.putImageData(imageData, 0, 0);
+          }
+      };
+
+      function Being() {
+        this.id = Being.id;
+        Being.id++;
+        this.genes = [];
+        for (var j = 0; j < t; j++) {
+          this.genes.push(Being.newGene());
+        }
+        this.canvas = new Canvas(w, h);
+      }
+      Being.prototype = {
+        crossover: function(parent) {
+          var crossoverPoint = randi(this.genes.length);
+          this.genes = JSON.parse(JSON.stringify(this.genes.slice(0, crossoverPoint).concat(parent.genes.slice(crossoverPoint))));
+        },
+        mutate: function(gene, amount) {
+          var trait = Being.traits[randi(Being.traits.length)];
+          if (trait in Being.wrappedTraits) {
+            gene[trait] = gene[trait] + rando() * amount;
+            if (gene[trait] > 1) gene[trait] -= 1;
+            if (gene[trait] < 0) gene[trait] += 1;
+          } else {
+            gene[trait] = Math.max(0, Math.min(1, gene[trait] + rando() * amount));
+          }
+        },
+        render: function() {
+          var genes = this.genes;
+          var ctx = this.canvas.ctx;
+
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, w, h);
+
+          genes.sort(function(a,b) {
+            return a.o - b.o;
+          });
+
+          var g = genes[0];
+          ctx.fillStyle = 'hsla(' + (g.h * 360 | 0) + ',' +
+                                    (g.s * 100 | 0) + '%,' +
+                                    (g.l * 100 | 0) + '%,' +
+                                    (g.a * 50 | 0) / 100 + ')';
+          ctx.fillRect(0, 0, w, h);
+
+          for (var i=1; i < genes.length; i++) {
+            var g = genes[i];
+            ctx.fillStyle = 'hsla(' + (g.h * 360 | 0) + ',' +
+                                      (g.s * 100 | 0) + '%,' +
+                                      (g.l * 100 | 0) + '%,' +
+                                      (g.a * 50 | 0) / 100 + ')';
+            ctx.beginPath();
+            ctx.moveTo(g.x1 * w | 0, g.y1 * h | 0);
+            ctx.lineTo(g.x2 * w | 0, g.y2 * h | 0);
+            ctx.lineTo(g.x3 * w | 0, g.y3 * h | 0);
+            ctx.lineTo(g.x4 * w | 0, g.y4 * h | 0);
+            ctx.lineTo(g.x5 * w | 0, g.y5 * h | 0);
+            ctx.fill();
+            ctx.restore();
+          }
+        },
+      }
+      Being.traits = [
+        'x1', 'y1',
+        'x2', 'y2',
+        'x3', 'y3',
+        'x4', 'y4',
+        'x5', 'y5',
+        'h', 's', 'l', 'a', 'o'
+      ];
+      Being.wrappedTraits= {h: true, o:true};
+      Being.newGene = function () {
+        var gene = {};
+        var traits = Being.traits;
+        for (var i = 0; i < Being.traits.length; i++) {
+          gene[traits[i]] = rand();
+        }
+        return gene;
+      };
+      Being.id = 0;
+
+
+      function rgbToHsl(r, g, b){
+        r /= 255, g /= 255, b /= 255;
+        var max = Math.max(r, g, b), min = Math.min(r, g, b);
+        var h, s, l = (max + min) / 2;
+
+        if(max == min){
+          h = s = 0; // achromatic
+        }else{
+          var d = max - min;
+          s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          switch (max){
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+          }
+          h /= 6;
+        }
+
+        return [h,s,l];
+      }
+
+      function diffImageData(c1, c2) {
+
+        id1 = c1.data;
+        id2 = c2.data;
+
+        var diff = 0;
+
+        for (var y = 0; y < h; y += sample) {
+          for (var x = 0; x < w; x += sample) {
+            var i = (y * w + x) * 4;
+            var d = hypot(id1[i+0] - id2[i+0],
+                          id1[i+1] - id2[i+1],
+                          id1[i+2] - id2[i+2]);
+            diff += d;
+          }
+        }
+        return diff;
+      }
+
+      function rand(n) {
+        return Math.random();
+      }
+
+      function rando(n) {
+        return Math.random() - .5;
+      }
+
+      function randi(n) {
+        return Math.random() * n | 0;
+      }
+
+      function init() {
+        master = new Canvas(w, h);
+        diff = new Canvas(w, h);
+        document.body.appendChild(master.el);
+        document.body.appendChild(diff.el);
+        kids = [];
+        for (var i = 0; i < n; i++) {
+          kids.push(new Being());
+          canvases.push(new Canvas(w, h));
+          document.body.appendChild(canvases[i].el);
+        }
+
+        master.ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, w, h);
+
+        generation();
+      }
+
+      var gen = 0;
+      function generation() {
+
+        stats.begin();
+
+        gen++
+
+        var winner;
+        var min = Infinity;
+        var loser = -1;
+        var max = 0;
+
+        var masterId = master.data;
+
+        for (var i = 0; i < n; i++) {
+          var kid = kids[i];
+          kid.render();
+          var score = diffImageData(masterId, kid.canvas.data);
+          kid.score = score;
+          if (score < min) {
+            winner = kid;
+            min = score;
+          }
+        }
+
+        if (winner != oldwinner) {
+          avgReign = avgReign * .9 + reign * .1;
+          reign = 0;
+        } else {
+          reign++;
+        }
+
+        kids.sort(function(a,b) {
+          return a.score - b.score;
+        });
+
+        pre.innerHTML = 'generation: ' + gen + '\n' +
+                        'best score: ' + (min | 0) + '\n' +
+                        'reign: ' + reign + ' (' + (avgReign  * .9 + reign * .1 | 0) + ' avg)\n' +
+                        'error: ' + (~~(min / maxError * 10000) / 100) + '%';
+
+        for (var i=0; i<n; i++) {
+          var ctx = canvases[i].ctx;
+          ctx.drawImage(kids[i].canvas.el, 0, 0);
+          ctx.fillStyle = 'rgba(255,255,255,.8)';
+          ctx.fillRect(0, h-20, 24, 20);
+          ctx.fillStyle = '#000';
+          ctx.fillText(kids[i].id, 5, h-7);
+        }
+
+        for (var i = 1; i < n; i++) {
+          var kid = kids[i];
+          kid.crossover(winner);
+          for (var j = 0; j < mutations; j++) {
+            kid.mutate(kid.genes[randi(kid.genes.length)], i / n);
+          }
+        }
+
+        var id = winner.canvas.data;
+        var id2 = masterId;
+
+        for (var i=0; i<id.data.length; i++) {
+          if (i % 4 != 3) {
+            id.data[i] = ~~((id.data[i] - id2.data[i]) / 16) * 8 + 127;
+          } else {
+            id.data[i] = 255;
+          }
+        }
+
+        diff.data = id;
+        oldwinner = winner;
+
+        stats.end();
+
+        mozRequestAnimationFrame(generation);
+      }
+
+    </script>
+  </body>
+</html>
