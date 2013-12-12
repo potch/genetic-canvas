@@ -32,12 +32,12 @@
     <script>
 
       // size of canvases
-      var w = 256;
-      var h = 320;
+      var w = 128;
+      var h = 160;
       // number of canvases
-      var n = 10;
+      var n = 20;
       // number of shapes
-      var t = 101;
+      var t = 100;
 
       var mutations = 10;
 
@@ -111,6 +111,7 @@
       };
 
       function Being() {
+        var self = this;
         this.id = Being.id;
         Being.id++;
         this.genes = [];
@@ -162,19 +163,18 @@
             ctx.moveTo(g.x1 * w | 0, g.y1 * h | 0);
             ctx.lineTo(g.x2 * w | 0, g.y2 * h | 0);
             ctx.lineTo(g.x3 * w | 0, g.y3 * h | 0);
-            ctx.lineTo(g.x4 * w | 0, g.y4 * h | 0);
-            ctx.lineTo(g.x5 * w | 0, g.y5 * h | 0);
             ctx.fill();
             ctx.restore();
           }
         },
       }
+      Being.globalTraits = [
+        'h', 's', 'l', 'a'
+      ];
       Being.traits = [
         'x1', 'y1',
         'x2', 'y2',
         'x3', 'y3',
-        'x4', 'y4',
-        'x5', 'y5',
         'h', 's', 'l', 'a', 'o'
       ];
       Being.wrappedTraits= {h: true, o:true};
