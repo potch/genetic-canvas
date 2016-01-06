@@ -30,28 +30,39 @@
     <pre id="status"></pre>
     <section id="stage"></section>
     <div>
+      <button id="start">start</button>
+      <button id="stopel">stop</button>
       <button id="getoutput">get dna</button>
       <button id="setinput">set dna</button>
+      <button id="svgel">draw svg</button>
+      <input type="range" min=1 max=3 step=.1 id="rad" value=2>
       <textarea id="output"></textarea>
     </div>
-    <script src="https://rawgithub.com/mrdoob/stats.js/master/src/Stats.js"></script>
+    <script src="Stats.js"></script>
     <script>
 
       // size of canvases
       var w = 256;
       var h = 256;
-      var t = 30;
-      var p = 6;
+      var t = 100;
+      var p = 3;
       // number of genes
-      var n = 3 + (4 + p * 2) * t;
+      var n = 3 + (5 + p * 2) * t;
       var improvements = 0;
       var reign = 0;
       var coups = 0;
+      var stases = 0;
       var gen = 0;
+      var radiation = rad.value;
+      var running = false;
 
       var dna = [p];
       for (var i = 0; i < n; i++) {
         dna.push(Math.random() * 256 | 0);
+      }
+
+      rad.onchange = function () {
+        radiation = rad.value;
       }
 
       var img = new Image();
@@ -78,10 +89,18 @@
       document.body.appendChild( stats.domElement );
 
       img.onload = init;
-      img.src = 'mona.jpg';
+      img.src = 'fx.png';
 
       var masterID;
       var parentScore;
+
+      parent.onclick = function(e) {
+        var tgt = e.target;
+        var x = e.pageX - tgt.offsetLeft;
+        var y = e.pageY - tgt.offsetTop;
+        console.log(x, y, tgt.offsetLeft, tgt.offsetTop);
+        output.value += pad(x) + pad(y);
+      }
 
       function init() {
         console.log('load');
@@ -100,7 +119,7 @@
           var childDna = [dna[0]];
           for (var i = 1; i < dna.length; i++) {
             childDna[i] = dna[i] || 0;
-            if (Math.random() > .995) {
+            if (Math.random() < 1/Math.pow(10,radiation)) {
               childDna[i] = childDna[i] ^ (1 << (Math.random() * 8 | 0));
             }
           }
@@ -113,14 +132,17 @@
             'generation ' + gen + '\n' +
             'score ' + (parentScore * 100000 | 0) / 1000 + '%\n' +
             'improvements ' + improvements + '\n' +
+            'stases' + stases + '\n' +
             'coups ' + coups + '\n' +
             'reign ' + reign;
 
-          if (childScore > parentScore ||
+          if (childScore >= parentScore ||
               reign / gen > .05 && Math.random() > .99
              ) {
             if (parentScore > childScore) {
               coups++;
+            } else if (parentScore === childScore) {
+              stases++;
             } else {
               improvements++;
             }
@@ -132,8 +154,18 @@
 
           stats.end();
 
-          requestAnimationFrame(generation);
+          if (running) {
+            setTimeout(generation, 0);
+          }
         }
+
+        start.onclick = function () {
+          running = true;
+          generation();
+        };
+        stopel.onclick = function () {
+          running = false;
+        };
 
         generation();
       }
@@ -143,25 +175,40 @@
         var r = dna[1];
         var g = dna[2];
         var b = dna[3];
-        var a, x1, y1, x2, y2, x3, y3;
+        var a, x, y;
 
         ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+        ctx.clearRect(0,0,w,h);
         ctx.fillRect(0, 0, w, h);
-        for (var i = 4; i < dna.length; i += (p * 2 + 4)) {
-          r = dna[i];
-          g = dna[i + 1];
-          b = dna[i + 2];
-          a = dna[i + 3];
-          x = dna[i + 4];
-          y = dna[i + 5];
-          ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (a/255) + ')';
-          ctx.beginPath();
-          ctx.moveTo(x, y);
+        var polys = [];
+        for (var i = 4; i < dna.length; i += (p * 2 + 5)) {
+          var poly = [];
+          poly.push(dna[i])
+          r = dna[i + 1];
+          g = dna[i + 2];
+          b = dna[i + 3];
+          a = dna[i + 4];
+          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*100)/100 + ')');
+          x = dna[i + 5];
+          y = dna[i + 6];
+          poly.push([x,y]);
           for (var j = 1; j < p; j++) {
-            ctx.lineTo(dna[i + 5 + j * 2], dna[i + 6 + j * 2]);
+            poly.push([dna[i + 5 + j * 2], dna[i + 6 + j * 2]]);
+          }
+          polys.push(poly);
+        }
+        polys.sort(function (a,b) {
+          return a[0] - b[0];
+        });
+        polys.forEach(function (o) {
+          ctx.beginPath();
+          ctx.fillStyle = o[1];
+          ctx.moveTo(o[2][0],o[2][1]);
+          for (var i = 1; i < p; i++) {
+            ctx.lineTo(o[i+2][0],o[i+2][1]);
           }
           ctx.fill();
-        }
+        });
       }
 
       function score(ctx) {
@@ -183,7 +230,8 @@
       }
 
       function load() {
-        var s = output.value;
+        var s = output.value.replace(/\s+/g,'');
+        console.log(s);
         var arr = s.match(/../g).map(function (s) {
           return parseInt(s, 16);
         });
@@ -194,6 +242,59 @@
         draw(parentCtx, dna);
         parentScore = score(parentCtx);
       }
+
+      function drawSVG() {
+        var svg = document.querySelector('svg');
+        if (!svg) {
+          svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('viewBox', '0 0 256 256');
+          svg.setAttribute('width', '256');
+          svg.setAttribute('height', '256');
+          stage.appendChild(svg);
+        }
+        svg.innerHTML = '';
+
+        var p = dna[0];
+        var r = dna[1];
+        var g = dna[2];
+        var b = dna[3];
+        var a, x, y;
+
+        svg.setAttribute('style', 'background: rgb(' + r + ',' + g + ',' + b + ')');
+        var polys = [];
+        for (var i = 4; i < dna.length; i += (p * 2 + 5)) {
+          var poly = [];
+          poly.push(dna[i])
+          r = dna[i + 1];
+          g = dna[i + 2];
+          b = dna[i + 3];
+          a = dna[i + 4];
+          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*100)/100 + ')');
+          x = dna[i + 5];
+          y = dna[i + 6];
+          poly.push([x,y]);
+          for (var j = 1; j < p; j++) {
+            poly.push([dna[i + 5 + j * 2], dna[i + 6 + j * 2]]);
+          }
+          polys.push(poly);
+        }
+        polys.sort(function (a,b) {
+          return a[0] - b[0];
+        });
+        polys.forEach(function (o) {
+          var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('fill', o[1]);
+          var data = 'M' + o[2][0] + ',' + o[2][1] + 'L';
+          for (var i = 1; i < p; i++) {
+            data += o[i+2][0] + ',' + o[i+2][1] + ' ';
+          }
+          path.setAttribute('d', data);
+          console.log(data);
+          svg.appendChild(path);
+        });
+      }
+
+      svgel.onclick = drawSVG;
 
       setinput.onclick = load;
       getoutput.onclick = dump;
