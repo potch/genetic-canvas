@@ -37,6 +37,7 @@
       <button id="svgel">draw svg</button>
       <input type="range" min=1 max=3 step=.1 id="rad" value=2>
       <textarea id="output"></textarea>
+      <input type="file" id="filepicker">
     </div>
     <script src="Stats.js"></script>
     <script>
@@ -298,6 +299,12 @@
 
       setinput.onclick = load;
       getoutput.onclick = dump;
+
+      document.getElementById('filepicker').addEventListener('change', function (e) {
+        var files = e.target.files;
+        if (files.length < 1) return;
+        img.src = URL.createObjectURL(files[0]);
+      });
     </script>
   </body>
 </html>
