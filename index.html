@@ -105,6 +105,8 @@
 
       function init() {
         console.log('load');
+        masterCtx.fillStyle = '#fff';
+        masterCtx.fillRect(0, 0, img.width, img.height);
         masterCtx.drawImage(img, 0, 0, img.width, img.height, 0, 0, w, h);
 
         masterID = masterCtx.getImageData(0, 0, w, h);
@@ -133,20 +135,10 @@
             'generation ' + gen + '\n' +
             'score ' + (parentScore * 100000 | 0) / 1000 + '%\n' +
             'improvements ' + improvements + '\n' +
-            'stases' + stases + '\n' +
-            'coups ' + coups + '\n' +
             'reign ' + reign;
 
-          if (childScore >= parentScore ||
-              reign / gen > .05 && Math.random() > .99
-             ) {
-            if (parentScore > childScore) {
-              coups++;
-            } else if (parentScore === childScore) {
-              stases++;
-            } else {
-              improvements++;
-            }
+          if (childScore > parentScore) {
+            improvements++;
             parentScore = childScore;
             dna = childDna;
             reign = 0;
