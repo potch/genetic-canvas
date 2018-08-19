@@ -15,6 +15,8 @@
       padding: 1em;
       margin: 0;
       background: rgba(255,255,255,.9);
+      width: 300px;
+      height: 7em;
     }
     canvas {
       margin: 1px;
@@ -35,11 +37,10 @@
       <button id="getoutput">get dna</button>
       <button id="setinput">set dna</button>
       <button id="svgel">draw svg</button>
-      <input type="range" min=1 max=3 step=.1 id="rad" value=2>
+      <input type="range" min=0 max=2 step=.1 id="rad" value=1>
       <textarea id="output"></textarea>
       <input type="file" id="filepicker">
     </div>
-    <script src="Stats.js"></script>
     <script>
 
       // size of canvases
@@ -56,6 +57,9 @@
       var gen = 0;
       var radiation = rad.value;
       var running = false;
+
+      var genPS = 0;
+      var lastGen = 0;
 
       var dna = [p];
       for (var i = 0; i < n; i++) {
@@ -83,12 +87,6 @@
 
       var pre = document.getElementById('status');
 
-      var stats = new Stats();
-      stats.domElement.style.position = 'fixed';
-      stats.domElement.style.right = '0px';
-      stats.domElement.style.bottom = '0px';
-      document.body.appendChild( stats.domElement );
-
       img.onload = init;
       img.src = 'mona.jpg';
 
@@ -115,27 +113,28 @@
 
         function generation() {
 
-          stats.begin();
-
           gen++;
           reign++;
-          var childDna = [dna[0]];
-          for (var i = 1; i < dna.length; i++) {
-            childDna[i] = dna[i] || 0;
-            if (Math.random() < 1/Math.pow(10,radiation)) {
-              childDna[i] = childDna[i] ^ (1 << (Math.random() * 8 | 0));
-            }
+          genPS = genPS * .99 + .01 * (Date.now() - lastGen);
+          lastGen = Date.now();
+
+          var childDna = dna.slice(0);
+          for (var i = 0; i < Math.pow(10, radiation); i++) {
+            let gene = Math.random() * (dna.length - 1) | 0;
+            childDna[gene + 1] = childDna[gene + 1] ^ (1 << (Math.random() * 8 | 0));
           }
 
           draw(childCtx, childDna);
 
           var childScore = score(childCtx);
 
-          pre.innerHTML =
-            'generation ' + gen + '\n' +
-            'score ' + (parentScore * 100000 | 0) / 1000 + '%\n' +
-            'improvements ' + improvements + '\n' +
-            'reign ' + reign;
+          if ((gen % 20) < 1) {
+            pre.innerText =
+              'generation ' + gen + '\n' +
+              'gps ' + (1000 / genPS | 0) + '\n' +
+              'score ' + (parentScore * 100000 | 0) / 1000 + '%\n' +
+              'improvements ' + improvements;
+          }
 
           if (childScore > parentScore) {
             improvements++;
@@ -145,14 +144,13 @@
             draw(parentCtx, dna);
           }
 
-          stats.end();
-
           if (running) {
             setTimeout(generation, 0);
           }
         }
 
         start.onclick = function () {
+          lastGen = Date.now() - 1000;
           running = true;
           generation();
         };
@@ -160,6 +158,7 @@
           running = false;
         };
 
+        lastGen = Date.now() - 1000;
         generation();
       }
 
@@ -181,7 +180,7 @@
           g = dna[i + 2];
           b = dna[i + 3];
           a = dna[i + 4];
-          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*100)/100 + ')');
+          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*70)/100 + ')');
           x = dna[i + 5];
           y = dna[i + 6];
           poly.push([x,y]);
@@ -190,16 +189,15 @@
           }
           polys.push(poly);
         }
-        polys.sort(function (a,b) {
+        polys.sort(function sort(a,b) {
           return a[0] - b[0];
         });
-        polys.forEach(function (o) {
+        polys.forEach(function drawPoly(o) {
           ctx.beginPath();
           ctx.fillStyle = o[1];
           ctx.moveTo(o[2][0],o[2][1]);
-          for (var i = 1; i < p; i++) {
-            ctx.lineTo(o[i+2][0],o[i+2][1]);
-          }
+          ctx.lineTo(o[3][0],o[3][1]);
+          ctx.lineTo(o[4][0],o[4][1]);
           ctx.fill();
         });
       }
@@ -207,11 +205,21 @@
       function score(ctx) {
         var total = 0;
         var id = ctx.getImageData(0, 0, w, h);
-        for (var i = 0; i < id.data.length; i++) {
-          var diff = Math.abs(masterID.data[i] - id.data[i]);
-          total += diff;
+        for (var i = 0; i < id.data.length; i+=4) {
+          total += diff(
+            id.data[i], id.data[i+1], id.data[i+2],
+            masterID.data[i], masterID.data[i+1], masterID.data[i+2]
+          );
         }
-        return (1 - total / (id.data.length * 128));
+        return (1 - total / (id.data.length / 4));
+      }
+
+      function diff(r, g, b, r2, g2, b2) {
+        let y1 = r * .299 + g * .587 + .114 * b;
+        let y2 = r2 * .299 + g2 * .587 + .114 * b2;
+        let yd = r2 / 255 - r / 255;
+        let cd = (Math.abs(r2 - r) + Math.abs(g2 - g) + Math.abs(b2 - b)) / 384;
+        return yd * yd * .7 + cd * cd * .3;
       }
 
       function pad(n) {
@@ -262,7 +270,7 @@
           g = dna[i + 2];
           b = dna[i + 3];
           a = dna[i + 4];
-          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*100)/100 + ')');
+          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*70)/100 + ')');
           x = dna[i + 5];
           y = dna[i + 6];
           poly.push([x,y]);
