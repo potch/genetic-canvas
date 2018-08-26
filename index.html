@@ -180,7 +180,7 @@
           g = dna[i + 2];
           b = dna[i + 3];
           a = dna[i + 4];
-          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*70)/100 + ')');
+          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*100)/100 + ')');
           x = dna[i + 5];
           y = dna[i + 6];
           poly.push([x,y]);
@@ -217,9 +217,11 @@
       function diff(r, g, b, r2, g2, b2) {
         let y1 = r * .299 + g * .587 + .114 * b;
         let y2 = r2 * .299 + g2 * .587 + .114 * b2;
-        let yd = r2 / 255 - r / 255;
-        let cd = (Math.abs(r2 - r) + Math.abs(g2 - g) + Math.abs(b2 - b)) / 384;
-        return yd * yd * .7 + cd * cd * .3;
+        let yd = (y2 - y1) / 255;
+        let rd = (r2 - r) / 255;
+        let gd = (g2 - g) / 255;
+        let bd = (b2 - b) / 255;
+        return yd * yd * .7 + (rd * rd + gd * gd + bd * bd) / 10;
       }
 
       function pad(n) {
@@ -270,7 +272,7 @@
           g = dna[i + 2];
           b = dna[i + 3];
           a = dna[i + 4];
-          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*70)/100 + ')');
+          poly.push('rgba(' + r + ',' + g + ',' + b + ',' + Math.round(a/255*100)/100 + ')');
           x = dna[i + 5];
           y = dna[i + 6];
           poly.push([x,y]);
