@@ -1,0 +1,26 @@
+{
+  "name": "genetic-canvas",
+  "version": "1.0.0",
+  "description": "Genetic canvas algorithm toy",
+  "main": "Stats.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node -r esm offline/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/potch/genetic-canvas.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/potch/genetic-canvas/issues"
+  },
+  "homepage": "https://github.com/potch/genetic-canvas#readme",
+  "dependencies": {
+    "esm": "^3.0.82",
+    "minimist": "^1.2.0",
+    "pngparse": "^2.0.1"
+  }
+}
