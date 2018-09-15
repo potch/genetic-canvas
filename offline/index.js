@@ -1,11 +1,20 @@
-import { Canvas } from './canvas.js';
-import { drawTriangle } from './rasterize.js';
-const pngparse = require('pngParse');
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 
-fs.mkdirSync(path.join('.','out'));
+const pngparse = require('pngParse');
+const parseArgs = require('minimist');
+
+let args = parseArgs(process.argv.slice(2));
+
+import { Canvas } from './canvas.js';
+import { drawTriangle } from './rasterize.js';
+
+try {
+  fs.mkdirSync(path.join('.','out'));
+} catch (e) {
+  console.warn('output directory already exists');
+}
 
 readline.emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);
@@ -90,23 +99,45 @@ function drawSVG(dna, gen) {
   });
 
   let out = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="256" height="256" viewBox="0 0 256 256" version="1.1" xmlns="http://www.w3.org/2000/svg" style="background:${bgColor}">
+<svg viewBox="0 0 256 256" version="1.1" xmlns="http://www.w3.org/2000/svg" style="background:${bgColor}">
   ${polys.map(p => p[1]).join('')}
 </svg>`;
 
-  fs.writeFileSync(path.join('.', 'out', 'gen-' + padWide(gen) + '.svg'), out);
+  fs.writeFileSync(path.join('.', 'out', 'gen-' + pad(gen, 7) + '.svg'), out);
 
 }
 
-function pad(n) {
+function padHex(n) {
   return ('0' + n.toString(16)).substr(-2);
 }
 
-function padWide(n) {
-  return ('0000000' + n.toString()).substr(-7);
+function pad(n, w) {
+  return ('0'.repeat(w) + n.toString()).substr(-w);
 }
 
-let filePath = path.join(process.cwd(), process.argv[process.argv.length-1])
+const size = parseInt(args.size, 10) || parseInt(args.s, 10) || 256;
+const n = parseInt(args.num, 10) || parseInt(args.n, 10) || 100;
+const limit = parseInt(args.limit, 10) || parseInt(args.l, 10) || Infinity;
+const decay = parseInt(args.decay, 10) || parseInt(args.d, 10) || 1e5;
+const snapshot = parseInt(args.snapshot, 10) || parseInt(args.p, 10) || 10000;
+const w = size;
+const h = size;
+const filePath = path.join(process.cwd(), args._[0]);
+let radiation;
+let dna = [];
+let gen = 0;
+let skip = 1;
+
+console.log(`${'*'.repeat(20)}
+Image:             ${filePath}
+Number of shapes:  ${n}
+Canvas size:       ${size}
+Generation limit:  ${limit}
+Mutation Falloff:  ${decay}
+Snapshot Interval: ${snapshot}
+${'*'.repeat(20)}`);
+
+console.log('press q to quit');
 
 pngparse.parseFile(filePath, (err, data) => {
   if (err) {
@@ -127,19 +158,10 @@ pngparse.parseFile(filePath, (err, data) => {
   startGenetics(input);
 });
 
-const n = 100;
-const w = 64;
-const h = 64;
-let radiation;
-let dna = [];
-let gen = 0;
-let skip = 1;
-
 process.stdin.on('keypress', (str, key) => {
   if (str === 'q') {
     console.log('exiting...');
-    fs.writeFileSync('./dna.txt', dna.map(pad).join(''));
-    drawSVG(dna, gen);
+    finalize();
     process.exit();
   }
   if (str === 's') {
@@ -151,6 +173,11 @@ process.stdin.on('keypress', (str, key) => {
     console.log('scoring skip set to ' + skip);
   }
 });
+
+function finalize() {
+  fs.writeFileSync('./dna.txt', dna.map(padHex).join(''));
+  drawSVG(dna, gen);
+}
 
 function startGenetics(input) {
 
@@ -198,27 +225,51 @@ function startGenetics(input) {
   }
 
 
+  let gpsSmooth = 0;
+
   function batch() {
-    radiation = 1 / (1 + gen/200000);
+    radiation = 1 / (1 + gen/decay);
 
     let sTime = Date.now();
     let cur = gen;
-    while (Date.now() - sTime < 1000) {
+    while (Date.now() - sTime < 500) {
       gen++;
       generation();
-      if ((gen % 10000) < 1) {
+      if ((gen % snapshot) < 1) {
         drawSVG(dna, gen);
+      }
+      if (gen >= limit) {
+        drawSVG(dna, gen);
+        break;
       }
     }
 
+    let gps = (gen - cur) * 2;
+    if (gpsSmooth) {
+      gpsSmooth = gps * .1 + (gpsSmooth) * .9
+    } else {
+      gpsSmooth = gps;
+    }
     console.log(`------------------------
 generation:   ${gen}
-gps:          ${gen - cur}
+gps:          ${gps}
 mutations:    ${Math.pow(100,radiation)|0}
 score:        ${(parentScore * 1e6|0)}
 improvements: ${improvements}`.trim());
+    if (isFinite(limit)) {
+      let timeLeft = (limit - gen) / gpsSmooth | 0;
+      let secs = pad(timeLeft % 60, 2);
+      let mins = pad(timeLeft / 60 | 0, 2);
+      let hrs = pad(timeLeft / 3600 | 0, 2);
+      console.log(`remaining:    ${hrs}:${mins}:${secs}`);
+    }
 
-    setTimeout(batch, 0);
+    if (gen < limit) {
+      setTimeout(batch, 0);
+    } else {
+      finalize
+      process.exit();
+    }
   }
   drawSVG(dna, gen);
   batch()
